@@ -1,66 +1,87 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const sampleApiKeys = [
-  {
-    id: 1,
-    name: 'default',
-    key: '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',
-    createdAt: '2024-03-12T10:00:00.000Z',
-    usage: 24
-  },
-  {
-    id: 2,
-    name: 'tmp1',
-    key: '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',
-    createdAt: '2024-03-11T15:30:00.000Z',
-    usage: 0
-  },
-  {
-    id: 3,
-    name: 'my-cool-api-key',
-    key: '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',
-    createdAt: '2024-03-10T09:15:00.000Z',
-    usage: 0
-  },
-  {
-    id: 4,
-    name: 'cursor',
-    key: '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',
-    createdAt: '2024-03-09T14:45:00.000Z',
-    usage: 0
-  }
-];
+import { supabase } from '@/lib/supabase';
+import Notification from '@/components/Notification';
 
 export default function ApiKeysDashboard() {
-  const [apiKeys, setApiKeys] = useState(sampleApiKeys);
+  const [apiKeys, setApiKeys] = useState([]);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyLimit, setNewKeyLimit] = useState('1000');
   const [isEditing, setIsEditing] = useState(null);
   const [editName, setEditName] = useState('');
-  const [showCopied, setShowCopied] = useState(null);
   const [revealedKeys, setRevealedKeys] = useState(new Set());
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [notification, setNotification] = useState(null);
 
-  const generateNewKey = () => {
+  useEffect(() => {
+    fetchApiKeys();
+  }, []);
+
+  const fetchApiKeys = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setApiKeys(data);
+    } catch (err) {
+      console.error('Error fetching API keys:', err);
+      setError('Failed to load API keys');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const generateNewKey = async () => {
     if (!newKeyName.trim()) return;
     
     const newKey = {
-      id: Date.now(),
       name: newKeyName,
       key: `tvly-${Math.random().toString(36).substring(2)}${Date.now().toString(36)}`,
-      createdAt: new Date().toISOString(),
-      usage: 0
+      usage: 0,
+      monthly_limit: parseInt(newKeyLimit)
     };
     
-    setApiKeys([...apiKeys, newKey]);
-    setNewKeyName('');
+    try {
+      const { data, error } = await supabase
+        .from('api_keys')
+        .insert([newKey])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setApiKeys([data, ...apiKeys]);
+      setNewKeyName('');
+      document.getElementById('newKeyModal').close();
+      showNotification('API key created successfully');
+    } catch (err) {
+      console.error('Error creating API key:', err);
+      showNotification('Failed to create API key', 'error');
+    }
   };
 
-  const deleteKey = (id) => {
-    if (confirm('Are you sure you want to delete this API key?')) {
+  const deleteKey = async (id) => {
+    if (!confirm('Are you sure you want to delete this API key?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('api_keys')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
       setApiKeys(apiKeys.filter(key => key.id !== id));
+      showNotification('API key deleted successfully');
+    } catch (err) {
+      console.error('Error deleting API key:', err);
+      showNotification('Failed to delete API key', 'error');
     }
   };
 
@@ -76,22 +97,57 @@ export default function ApiKeysDashboard() {
     });
   };
 
-  const copyToClipboard = (text, id) => {
+  const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    setShowCopied(id);
-    setTimeout(() => setShowCopied(null), 2000);
+    showNotification('API key copied to clipboard');
   };
 
-  const updateKeyName = () => {
+  const updateKeyName = async () => {
     if (!editName.trim()) return;
     
-    setApiKeys(apiKeys.map(key => 
-      key.id === isEditing ? { ...key, name: editName } : key
-    ));
-    setIsEditing(null);
-    setEditName('');
-    document.getElementById('editKeyModal').close();
+    try {
+      const { data, error } = await supabase
+        .from('api_keys')
+        .update({ name: editName })
+        .eq('id', isEditing)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setApiKeys(apiKeys.map(key => 
+        key.id === isEditing ? data : key
+      ));
+      setIsEditing(null);
+      setEditName('');
+      document.getElementById('editKeyModal').close();
+      showNotification('API key name updated successfully');
+    } catch (err) {
+      console.error('Error updating API key:', err);
+      showNotification('Failed to update API key name', 'error');
+    }
   };
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-red-600">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -157,13 +213,7 @@ export default function ApiKeysDashboard() {
                   <td className="py-4">{key.name}</td>
                   <td className="py-4">{key.usage}</td>
                   <td className="py-4 font-mono">
-                    {showCopied === key.id ? (
-                      <span className="text-green-600">✓ Copied!</span>
-                    ) : revealedKeys.has(key.id) ? (
-                      key.key
-                    ) : (
-                      key.key.replace(/[a-zA-Z0-9]/g, '*')
-                    )}
+                    {revealedKeys.has(key.id) ? key.key : key.key.replace(/[a-zA-Z0-9]/g, '*')}
                   </td>
                   <td className="py-4">
                     <div className="flex justify-end gap-2">
@@ -175,7 +225,7 @@ export default function ApiKeysDashboard() {
                         {revealedKeys.has(key.id) ? '👁️‍🗨️' : '👁️'}
                       </button>
                       <button
-                        onClick={() => copyToClipboard(key.key, key.id)}
+                        onClick={() => copyToClipboard(key.key)}
                         className="p-2 text-gray-500 hover:text-gray-700"
                         title="Copy to clipboard"
                       >
@@ -318,6 +368,13 @@ export default function ApiKeysDashboard() {
           </form>
         </div>
       </dialog>
+
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+        />
+      )}
     </div>
   );
 } 
