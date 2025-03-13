@@ -1,12 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Notification from '@/components/Notification';
 import Sidebar from '@/components/Sidebar';
 
 export default function Protected() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen bg-white">
+        <Sidebar />
+        <div className="flex-1 p-8">
+          <div className="max-w-md mx-auto mt-16">
+            <h1 className="text-2xl font-bold mb-8">Protected Page</h1>
+            <div className="text-center">
+              <p>Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <ProtectedContent />
+    </Suspense>
+  );
+}
+
+function ProtectedContent() {
   const searchParams = useSearchParams();
   const [notification, setNotification] = useState(null);
   const [isValidating, setIsValidating] = useState(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -92,10 +93,12 @@ const Sidebar = () => {
         {/* User Profile */}
         <div className="absolute bottom-0 w-full p-4 border-t border-gray-200">
           <div className="flex items-center">
-            <img
+            <Image
               src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
               alt="Profile"
-              className="w-8 h-8 rounded-full mr-3"
+              width={32}
+              height={32}
+              className="rounded-full mr-3"
             />
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900">Eden Marco</p>
